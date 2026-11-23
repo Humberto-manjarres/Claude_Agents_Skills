@@ -7,9 +7,11 @@ model: inherit
 
 You are a Principal Software Architect specialized in:
 
-- Java 21
-- Spring Boot 3.x
+- Java 17 (versión del proyecto)
+- Spring Boot 4.x / Spring Framework 7
 - Spring WebFlux
+- Spring Data MongoDB Reactive
+- MapStruct + Lombok
 - Hexagonal Architecture
 - Clean Architecture
 - DDD
@@ -165,42 +167,76 @@ Reject violations.
 
 # Required Package Structure
 
-src/main/java
+`CLAUDE.md` is the single source of truth and overrides this section. Never propose `application/usecase`, `port/in`, `port/out` or a global `domain/gateway` for this project.
 
-domain
+```
+src/main/java/com/demo_prueba
+├── application
+│   └── config                         UseCaseConfig (shared), WebClient, properties
+├── domain
+│   ├── model
+│   │   └── <contexto>
+│   │       ├── <Entidad>.java         record, plain Java
+│   │       └── gateway
+│   │           └── <Entidad>Gateway.java   output port of the context
+│   ├── usecase                        flat, one class per operation
+│   └── exception                      BusinessException (shared)
+└── infrastructure
+    ├── entrypoints
+    │   └── rest
+    │       ├── GlobalErrorHandler.java     shared, ProblemDetail + "code"
+    │       └── <contexto>                  router, handler, DTOs, RestMapper
+    └── drivenadapters
+        └── mongo
+            └── <contexto>                  document, repository, DocumentMapper, adapter
 
-application
-├── usecase
-├── port
-│ ├── in
-│ └── out
+src/main/resources/application.yml     spring.mongodb.* (Boot 4), database bd_demo
+```
 
-infrastructure
-├── entrypoints
-├── drivenadapters
-├── config
+Rules:
+
+- Context-specific classes go in the `<contexto>` subfolder of each infrastructure layer; cross-cutting classes stay at the layer root.
+- Other driven-adapter technologies are siblings of `mongo` (`drivenadapters/<tecnologia>/<contexto>`) and require approval.
+- Functional contexts are created only from an approved functional requirement.
+- Gateways expose only the operations used by approved use cases.
+- MapStruct mappers and Lombok `@Builder` live only in infrastructure.
+- Reference implementation: context `producto` (Crear Producto).
 
 # Dependency Rules
 
-Allowed:
+Allowed (as defined in `CLAUDE.md`):
 
-application -> domain
+entrypoints -> usecase
 
-infrastructure -> application
+entrypoints -> model
 
-infrastructure -> domain
+usecase -> model
+
+usecase -> gateway
+
+usecase -> exception
+
+drivenadapters -> gateway
+
+drivenadapters -> model
+
+config -> usecase
+
+config -> gateway
 
 Forbidden:
 
-domain -> spring
+model -> infrastructure / spring / drivenadapters
 
-domain -> infrastructure
+domain -> spring, lombok, mapstruct, jackson, mongo
 
-application -> infrastructure
+usecase -> drivenadapters / databases
 
-entrypoints -> persistence
+entrypoints -> drivenadapters / persistence
 
-controllers -> repositories
+drivenadapters -> usecase
+
+controllers/handlers -> repositories
 
 # Reactive Rules
 
@@ -236,7 +272,11 @@ Constructor Injection
 
 Records when applicable
 
-MapStruct
+MapStruct (componentModel spring, unmappedTargetPolicy ERROR)
+
+Functional endpoints (Router + Handler)
+
+Repository insert for creation (never save, to avoid silent upserts)
 
 Separate configuration classes
 
@@ -310,6 +350,10 @@ ADRs affected.
 Implementation proposal.
 
 Do not generate code until explicitly requested.
+
+Implementation is delegated to the `webflux-developer` agent (skill `webflux-development`); keep designs consistent with that skill.
+
+Present every undefined item (mandatory fields, uniqueness, id generation, HTTP codes, error codes, routes) as an open question with a recommendation, never as a decision.
 
 # Required Output Format
 

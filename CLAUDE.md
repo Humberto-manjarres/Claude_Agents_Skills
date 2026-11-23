@@ -33,8 +33,14 @@ src/main/java/com/demo_prueba
 └── infrastructure
     ├── entrypoints
     │   └── rest
+    │       └── <contexto>
     │
     └── drivenadapters
+        └── mongo
+            └── <contexto>
+
+src/main/resources
+└── application.yml
 
 ---
 
@@ -108,6 +114,12 @@ Responsable de:
 - Properties.
 - Configuración de WebClient.
 - Configuración de seguridad cuando aplique.
+
+Reglas:
+
+- Los casos de uso se registran como beans en `application/config/UseCaseConfig.java` (clase compartida por todos los contextos).
+- La configuración de la aplicación se define en `src/main/resources/application.yml`. No usar `application.properties`.
+- MongoDB (Spring Boot 4) se configura con el prefijo `spring.mongodb.*`. Base de datos: `bd_demo`. URI mediante la variable de entorno `MONGODB_URI`.
 
 ---
 
@@ -198,6 +210,19 @@ Reglas:
 - No implementar lógica de negocio.
 - No acceder directamente a repositorios.
 - Utilizar exclusivamente casos de uso.
+- Todo lo específico de un contexto va en su subcarpeta: `infrastructure/entrypoints/rest/<contexto>/`.
+- Los componentes transversales (por ejemplo `GlobalErrorHandler`) van en la raíz de `infrastructure/entrypoints/rest`.
+
+Ejemplo:
+
+infrastructure/entrypoints/rest
+├── GlobalErrorHandler.java
+└── producto
+    ├── ProductoRouter.java
+    ├── ProductoHandler.java
+    ├── CrearProductoRequest.java
+    ├── ProductoResponse.java
+    └── ProductoRestMapper.java
 
 ---
 
@@ -215,6 +240,17 @@ Reglas:
 - Deben implementar contratos definidos en:
   domain/model/<contexto>/gateway
 - No deben contener reglas de negocio.
+- Se organizan por tecnología y luego por contexto: `infrastructure/drivenadapters/<tecnologia>/<contexto>/`.
+- Tecnología aprobada: `mongo`. Otras tecnologías (WebClient, Kafka, etc.) requieren aprobación.
+
+Ejemplo:
+
+infrastructure/drivenadapters/mongo
+└── producto
+    ├── ProductoDocument.java
+    ├── ProductoMongoRepository.java
+    ├── ProductoDocumentMapper.java
+    └── ProductoMongoAdapter.java
 
 ---
 
@@ -251,7 +287,13 @@ usecase → gateway
 
 drivenadapters → gateway
 
+drivenadapters → model
+
+entrypoints → model
+
 config → usecase
+
+config → gateway
 
 ---
 

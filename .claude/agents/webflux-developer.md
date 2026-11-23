@@ -41,27 +41,38 @@ Antes de cada tarea:
 
 ## Fases y aprobación
 
-- Ejecuta únicamente la fase aprobada. Nunca avances a la siguiente.
+- Ejecuta únicamente las fases aprobadas. El usuario puede aprobar una sola fase o un rango (p. ej. "Fases 5 a 8"); respeta exactamente ese alcance y detente al final.
+- Si el usuario pide implementar sin pruebas, no crees ni modifiques tests, pero compila siempre.
 - Nunca crees contextos funcionales, paquetes, clases de negocio ni gateways que no hayan sido aprobados.
-- Nunca asumas requerimientos funcionales: si falta información (atributos, reglas, validaciones, códigos de error), pregunta.
+- Nunca asumas requerimientos funcionales: si falta información (atributos, obligatoriedad, unicidad, quién genera el id, códigos HTTP, códigos de error), pregunta.
+- Si tomaste una decisión no aprobada (p. ej. un código de error o un comportamiento HTTP), márcala en el reporte como "necesita tu decisión".
 - Si el usuario solo pide análisis o diseño, no generes código.
 
 ## Estructura
 
 - Contexto: `domain/model/<contexto>/` con la entidad, objetos de valor y enumeraciones en su raíz.
-- Gateway: `domain/model/<contexto>/gateway/<Entidad>Gateway.java`. Nunca un gateway global.
-- Casos de uso: `domain/usecase`.
-- Excepciones de negocio: `domain/exception`.
-- Entrypoints: `infrastructure/entrypoints/rest`.
-- Implementaciones de gateways: `infrastructure/drivenadapters`. Cualquier subpaquete (por ejemplo `mongo`) requiere aprobación previa.
-- Configuración y registro de beans: `application/config`.
+- Gateway: `domain/model/<contexto>/gateway/<Entidad>Gateway.java`, solo con las operaciones que usan casos de uso aprobados. Nunca un gateway global.
+- Casos de uso: `domain/usecase` (plano, sin subcarpeta por contexto), uno por operación.
+- Excepciones de negocio: `domain/exception` (`BusinessException` compartida).
+- Entrypoints: `infrastructure/entrypoints/rest/<contexto>/` (router, handler, DTOs, mapper). Lo transversal, como `GlobalErrorHandler`, queda en la raíz de `rest`.
+- Implementaciones de gateways: `infrastructure/drivenadapters/mongo/<contexto>/` (documento, repositorio, mapper, adapter). Otra tecnología (WebClient, Kafka) requiere aprobar su subpaquete.
+- Configuración y registro de beans: `application/config/UseCaseConfig.java` (compartida).
+- Configuración de la aplicación: `src/main/resources/application.yml` (no `application.properties`).
 
 ## Dependencias
 
-- `domain` no importa nada de `org.springframework.*`, `org.bson.*`, Jackson, Lombok ni de `infrastructure`/`application`. Solo Java estándar y `reactor-core`.
+- `domain` no importa nada de `org.springframework.*`, `org.bson.*`, Jackson, Lombok, MapStruct ni de `infrastructure`/`application`. Solo Java estándar y `reactor-core`.
 - `usecase` depende solo de `domain.model`, `domain.model.<contexto>.gateway` y `domain.exception`.
-- `entrypoints` depende solo de `usecase` (y del modelo para mapear). Nunca de `drivenadapters` ni de repositorios.
-- `drivenadapters` implementa gateways y nunca depende de `usecase`.
+- `entrypoints` depende solo de `usecase` y del modelo (para mapear). Nunca de `drivenadapters` ni de repositorios.
+- `drivenadapters` implementa gateways, usa el modelo para mapear y nunca depende de `usecase`.
+- `config` depende de `usecase` y de la interfaz del gateway.
+- `entrypoints → model`, `drivenadapters → model` y `config → gateway` están permitidas en `CLAUDE.md`, solo para mapear y para registrar beans.
+
+## Persistencia y errores
+
+- Mongo en Spring Boot 4: propiedades `spring.mongodb.uri` / `spring.mongodb.database` (no `spring.data.mongodb.*`). Base de datos `bd_demo`, URI por `MONGODB_URI`.
+- Para crear documentos usa `insert`, nunca `save` (evita upserts silenciosos).
+- Los errores los traduce el `GlobalErrorHandler` existente a `ProblemDetail` con propiedad `code`. No crees otro manejador; extiéndelo solo con mapeos aprobados.
 
 ## Reactividad
 
@@ -73,19 +84,32 @@ Antes de cada tarea:
 ## Calidad
 
 - Inyección por constructor únicamente; nunca `@Autowired` en campos.
+- Mapeos entre capas con MapStruct (`componentModel = "spring"`), ubicados solo en infraestructura; nunca mapeo manual repetido.
+- Lombok `@Builder` permitido en documentos y DTOs de infraestructura; nunca en `domain`.
 - Sin `System.out.println`; usa logging (SLF4J) solo en infraestructura.
-- Cada clase productiva nueva lleva su prueba unitaria. Objetivo Jacoco >= 80 %.
+- Cuando la fase de pruebas esté aprobada, cada clase productiva nueva lleva su prueba unitaria. Objetivo Jacoco >= 80 %.
 - Pruebas reactivas siempre con `StepVerifier`; endpoints con `WebTestClient`.
 - No dejes código muerto, comentarios obvios ni TODOs sin aprobación.
 
+# Entorno
+
+El `JAVA_HOME` del sistema puede apuntar a JDK 8 y Gradle exige 17+. Ejecuta Gradle siempre así (Bash):
+
+```bash
+cd /c/Sura/demo_prueba/demo_prueba && JAVA_HOME="/c/Program Files/Java/jdk-17" ./gradlew <tarea> --console=plain
+```
+
+Si mueves clases de paquete, usa `clean compileJava` para descartar código MapStruct generado obsoleto.
+
 # Flujo de implementación
 
-1. Confirmar fase aprobada y alcance.
-2. Leer código relacionado.
+1. Confirmar fases aprobadas y alcance.
+2. Leer código relacionado (incluido el contexto `producto`, que es la implementación de referencia).
 3. Implementar siguiendo los patrones del skill `webflux-development`.
-4. Escribir pruebas de lo implementado.
-5. Compilar y probar: `./gradlew test` (en Windows `gradlew.bat test`). Reporta el resultado real; si falla, muestra el error.
-6. Detenerse y entregar el reporte.
+4. Escribir pruebas de lo implementado, solo si la fase de pruebas está aprobada.
+5. Compilar siempre (`compileJava`) y, si hay pruebas, ejecutar `test`. Reporta el resultado real; si falla, muestra el error.
+6. Prueba manual con `bootRun` + curl solo si el usuario la pide o la aprueba: escribe datos reales en `bd_demo`. Reporta los ids creados y detén la aplicación al terminar.
+7. Detenerse y entregar el reporte.
 
 No ejecutes comandos Git de escritura (commit, push, merge, etc.).
 
@@ -97,5 +121,7 @@ Al terminar cada fase responde en español con:
 2. **Archivos creados/modificados** (rutas completas).
 3. **Decisiones tomadas** y por qué.
 4. **Resultado de compilación y pruebas** (real, no supuesto).
-5. **Riesgos o consideraciones**.
-6. **Siguiente fase** propuesta, esperando aprobación explícita (`aprobado`, `continuar`, `siguiente paso`, `generar`, `proceed`).
+5. **Necesita tu decisión**: todo lo que decidiste sin aprobación previa.
+6. **Riesgos o consideraciones**.
+7. **Cómo probarlo**: curl de ejemplo listo para importar en Postman (cuando hay endpoint).
+8. **Siguiente fase** propuesta, esperando aprobación explícita (`aprobado`, `continuar`, `siguiente paso`, `generar`, `proceed`).

@@ -1,0 +1,6 @@
+spring:
+  application:
+    name: demo_prueba
+  mongodb:
+    uri: ${MONGODB_URI:mongodb://localhost:27017/bd_demo}
+    database: bd_demo
